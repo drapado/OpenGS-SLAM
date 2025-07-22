@@ -61,6 +61,21 @@ Our test setup was:
 - Ubuntu 20.04: `pytorch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 cudatoolkit=11.8`
 - NVIDIA RTX A6000
 
+## Installation with devcontainer
+Uncomment the commands in `.devcontainer/post-create.sh` the first time you build the container. This will create the Conda environment. This process takes several minutes as Anaconda is very slow when solving the environmant config file. 
+
+Once the devcontainer has built successfully, a folder called `miniconda3` will be created inside the repository. It containes the `opengs-slam` environment.
+
+After this you can comment out the commands in `.devcontainer/post-create.sh` again.
+
+
+### Run inside contaienr
+```
+conda activate opengs-slam
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/workspaces/OpenGS-SLAM/miniconda3/envs/opengs-slam/lib/python3.11/site-packages/torch/lib/
+CUDA_VISIBLE_DEVICES=0 python slam.py --config configs/mono/waymo/13476.yaml 
+```
+
 ## Checkpoints
 
 You can download the *'<u>DUSt3R_ViTLarge_BaseDecoder_512_dpt.pth</u>'* checkpoint from the [DUSt3R](https://github.com/naver/dust3r) code repository, and save it to the 'checkpoints' folder.

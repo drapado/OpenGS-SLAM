@@ -9,3 +9,8 @@ preprocess/
 *.tmp
 *.swp
 *.DS_Store
+
+datasets/*
+miniconda3/*
+miniconda4/*
+checkpoints/DUSt3R_ViTLarge_BaseDecoder_512_dpt.pth
