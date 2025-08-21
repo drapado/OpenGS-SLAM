@@ -9,6 +9,7 @@ import trimesh
 from PIL import Image
 
 from gaussian_splatting.utils.graphics_utils import focal2fov
+from utils.agri_parser import AgriParser
 
 try:
     import pyrealsense2 as rs
@@ -469,6 +470,74 @@ class EurocDataset(StereoDataset):
         self.poses = parser.poses
 
 
+# Agricultural
+class AgriDataset(MonocularDataset):
+    def __init__(self, args, path, config):
+        super().__init__(args, path, config)
+        dataset_path = config["Dataset"]["dataset_path"]
+        parser = AgriParser(dataset_path)
+        self.num_imgs = parser.n_img
+        self.color_paths = parser.color_paths
+        self.depth_paths = [None] * parser.n_img  # No depth paths for RGB-only
+        self.poses = parser.poses
+        
+        # Sky removal configuration
+        self.use_sky_removal = config["Dataset"].get("use_sky_removal", False)
+        
+        if self.use_sky_removal:
+            # Build mask paths corresponding to color paths
+            self.mask_paths = []
+            for color_path in self.color_paths:
+                # Replace rgb path with depth_anything path and .jpg with .png
+                mask_path = color_path.replace('/rgb/', '/depth_anything/').replace('.jpg', '.png')
+                self.mask_paths.append(mask_path)
+            print(f"Sky removal enabled with depth threshold: 0")
+
+    def apply_sky_mask(self, image, mask_path):
+        """Apply sky removal using depth_anything masks"""
+        try:
+            # Load depth mask
+            depth_mask = np.array(Image.open(mask_path))
+            
+            # Create sky mask: pixels with depth == threshold (0) are sky
+            sky_mask = depth_mask == 0
+            
+            # Apply mask to image (set sky regions to black)
+            masked_image = image.copy()
+            masked_image[sky_mask] = [0, 0, 0]  # Set sky pixels to black
+            
+            return masked_image
+            
+        except Exception as e:
+            print(f"Warning: Failed to apply sky mask for {mask_path}: {e}")
+            return image  # Return original image if masking fails
+
+    def __getitem__(self, idx):  
+        color_path = self.color_paths[idx]
+        pose = self.poses[idx]
+
+        image = np.array(Image.open(color_path))
+        
+        # Apply sky removal if enabled
+        if self.use_sky_removal and hasattr(self, 'mask_paths'):
+            mask_path = self.mask_paths[idx]
+            image = self.apply_sky_mask(image, mask_path)
+        
+        depth = None  # No depth for RGB-only agricultural dataset
+
+        if self.disorted:
+            image = cv2.remap(image, self.map1x, self.map1y, cv2.INTER_LINEAR) 
+
+        image = (
+            torch.from_numpy(image / 255.0)
+            .clamp(0.0, 1.0)
+            .permute(2, 0, 1)
+            .to(device=self.device, dtype=self.dtype)
+        )
+        pose = torch.from_numpy(pose).to(device=self.device)
+        return image, depth, pose
+
+
 class RealsenseDataset(BaseDataset):
     def __init__(self, args, path, config):
         super().__init__(args, path, config)
@@ -573,5 +642,7 @@ def load_dataset(args, path, config):
         return RealsenseDataset(args, path, config)
     elif config["Dataset"]["type"] == "waymo":
         return WaymoDataset(args, path, config)
+    elif config["Dataset"]["type"] == "agri":
+        return AgriDataset(args, path, config)
     else:
         raise ValueError("Unknown dataset type")

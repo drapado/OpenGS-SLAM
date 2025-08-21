@@ -9,7 +9,7 @@ Results:
   color_refinement: True
 
 Dataset:
-  type: 'waymo'
+  type: 'agri'
   sensor_type: 'monocular'
   pcd_downsample: 64
   pcd_downsample_init: 32
@@ -35,6 +35,7 @@ Training:
   pose_window: 3
   edge_threshold: 1.1
   rgb_boundary_threshold: 0.01
+  validation_start_frame: -1  # Frame number from which to stop training GS model (-1 to disable)
 
   kf_translation: 0.08
   kf_min_translation: 0.05

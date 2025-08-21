@@ -158,6 +158,11 @@ def get_scale(matches_im1_0, matches_im1_1, matches_im2_0, matches_im2_1, matche
     pcd2 = matches_3d2_1[matching_index_2]
     
     num_matches = len(matching_index_1)
+    
+    # Check if we have any matches at all
+    if num_matches == 0:
+        return 1.0, 1.0
+    
     match_idx_to_viz = range(0,num_matches)
     
     sample_matches_pcd0 = pcd0[match_idx_to_viz]
@@ -166,6 +171,12 @@ def get_scale(matches_im1_0, matches_im1_1, matches_im2_0, matches_im2_1, matche
     # Calculate the scale factor
     scale = []  
     eps = 1e-8
+    
+    # Check if we have enough matches to calculate scale
+    if len(match_idx_to_viz) < 2:
+        # Not enough matches, return default scale values
+        return 1.0, 1.0
+    
     for i in range(1, len(match_idx_to_viz)):
         diff1 = sample_matches_pcd0[i,:]-sample_matches_pcd0[0,:]
         diff1 = np.append(diff1, np.sqrt(diff1[0]**2+diff1[1]**2+diff1[2]**2))
@@ -173,7 +184,17 @@ def get_scale(matches_im1_0, matches_im1_1, matches_im2_0, matches_im2_1, matche
         diff2 = np.append(diff2, np.sqrt(diff2[0]**2+diff2[1]**2+diff2[2]**2))
         scale.append(diff2/(diff1 + eps))
 
+    # Convert to numpy array and check if we have valid scale calculations
+    if len(scale) == 0:
+        return 1.0, 1.0
+        
     scale_array = np.array(scale)
+    
+    # Check if scale_array has the expected shape
+    if scale_array.ndim == 1 or scale_array.shape[1] < 4:
+        # If we don't have the expected 4D structure, return default values
+        return 1.0, 1.0
+    
     scale_mean = np.mean(scale_array[:,3])
     scale_median = np.median(scale_array[:,3])
 

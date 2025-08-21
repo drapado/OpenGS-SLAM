@@ -14,3 +14,10 @@ datasets/*
 miniconda3/*
 miniconda4/*
 checkpoints/DUSt3R_ViTLarge_BaseDecoder_512_dpt.pth
+test/*
+results/*
+submodules/*
+*.so
+*.o
+agri-slam-data/*
+wandb/*

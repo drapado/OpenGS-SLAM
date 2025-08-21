@@ -128,7 +128,9 @@ class SLAM:
 
         if self.eval_rendering:       
             self.gaussians = self.frontend.gaussians
-            kf_indices = self.frontend.kf_indices     
+            kf_indices = self.frontend.kf_indices
+            validation_start_frame = self.config["Training"].get("validation_start_frame", -1)
+            
             ATE = eval_ate(
                 self.frontend.cameras,
                 self.frontend.kf_indices,
@@ -136,6 +138,7 @@ class SLAM:
                 0,
                 final=True,
                 monocular=self.monocular,
+                validation_start_frame=validation_start_frame,
             )
 
             start_time = time.time()
@@ -148,6 +151,7 @@ class SLAM:
                 self.background,
                 kf_indices=kf_indices,
                 iteration="before_opt",
+                validation_start_frame=validation_start_frame,
             )
             columns = ["tag", "psnr", "ssim", "lpips", "RMSE ATE", "FPS"]
             metrics_table = wandb.Table(columns=columns)
@@ -188,6 +192,7 @@ class SLAM:
                     self.background,
                     kf_indices=kf_indices,
                     iteration="after_opt",
+                    validation_start_frame=validation_start_frame,
                 )
                 metrics_table.add_data(
                     "After_opt",
@@ -218,6 +223,8 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str)
     parser.add_argument("--eval", action="store_true")
     parser.add_argument("--color", action="store_true")
+    parser.add_argument("--validation_start_frame", type=int, default=-1, 
+                        help="Frame number from which to stop training GS model and start validation mode (-1 to disable)")
 
     args = parser.parse_args(sys.argv[1:])
 
@@ -243,6 +250,11 @@ if __name__ == "__main__":
         
     if args.color:
         config["Results"]["color_refinement"] = True
+        
+    # Override validation start frame if provided via command line
+    if args.validation_start_frame >= 0:
+        config["Training"]["validation_start_frame"] = args.validation_start_frame
+        Log(f"Validation start frame set to: {args.validation_start_frame}")
 
     if config["Results"]["save_results"]:
         mkdir_p(config["Results"]["save_dir"])

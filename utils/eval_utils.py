@@ -28,6 +28,12 @@ from utils.logging_utils import Log
 
 # Use evo to evaluate the alignment between the estimated trajectory and the Ground Truth trajectory, calculate ATE, and plot the trajectory
 def evaluate_evo(poses_gt, poses_est, plot_dir, label, monocular=False):
+    # Check if we have enough poses for alignment
+    if len(poses_gt) < 3 or len(poses_est) < 3:
+        Log(f"Warning: Insufficient poses for trajectory evaluation. GT: {len(poses_gt)}, EST: {len(poses_est)}")
+        Log("Need at least 3 poses for trajectory alignment. Returning dummy ATE value.")
+        return 0.0
+        
     ## Plot
     traj_ref = PosePath3D(poses_se3=poses_gt)
     traj_est = PosePath3D(poses_se3=poses_est)
@@ -72,7 +78,7 @@ def evaluate_evo(poses_gt, poses_est, plot_dir, label, monocular=False):
     return ape_stat
 
 # Evaluate the ATE of keyframes, and when evaluating, invert T to transform back to C2W
-def eval_ate(frames, kf_ids, save_dir, iterations, final=False, monocular=False, BA=False):
+def eval_ate(frames, kf_ids, save_dir, iterations, final=False, monocular=False, BA=False, validation_start_frame=-1):
     trj_data = dict()
     latest_frame_idx = kf_ids[-1] + 2 if final else kf_ids[-1] + 1
     #latest_frame_idx = len(frames) if final else kf_ids[-1] + 1
@@ -85,7 +91,19 @@ def eval_ate(frames, kf_ids, save_dir, iterations, final=False, monocular=False,
         pose[0:3, 3] = T.cpu().numpy()
         return pose
 
-    for kf_id in kf_ids:
+    # Filter keyframes to only include those from validation_start_frame onwards
+    eval_kf_ids = kf_ids
+    if validation_start_frame >= 0:
+        eval_kf_ids = [kf_id for kf_id in kf_ids if kf_id >= validation_start_frame]
+        Log(f"ATE evaluation using {len(eval_kf_ids)} keyframes from frame {validation_start_frame} onwards")
+        
+        # Check if we have enough keyframes for meaningful evaluation
+        if len(eval_kf_ids) < 3:
+            Log(f"Warning: Only {len(eval_kf_ids)} keyframes available for validation. Need at least 3 for trajectory alignment.")
+            Log("Returning dummy ATE value. Consider lowering validation_start_frame.")
+            return 0.0
+
+    for kf_id in eval_kf_ids:
     #for kf_id in range(latest_frame_idx):
         #print(kf_id)
         kf = frames[kf_id]
@@ -138,10 +156,15 @@ def eval_rendering(
     background,
     kf_indices,
     iteration="final",
+    validation_start_frame=-1,  # New parameter to specify validation start frame
 ):
     interval = 1
     img_pred, img_gt, saved_frame_idx, img_residual = [], [], [], []
     end_idx = len(frames) - 1 if iteration == "final" or "before_opt" else iteration
+    
+    # Determine the start index for evaluation
+    start_idx = max(0, validation_start_frame) if validation_start_frame >= 0 else 0
+    
     psnr_array, ssim_array, lpips_array = [], [], []
     cal_lpips = LearnedPerceptualImagePatchSimilarity(
         net_type="alex", normalize=True
@@ -156,7 +179,7 @@ def eval_rendering(
 
     N = 0
     start_time1 = time.time()
-    for idx in range(0, end_idx, interval):
+    for idx in range(start_idx, end_idx, interval):
         if idx in kf_indices:
             continue
         N = N+1
@@ -229,7 +252,7 @@ def eval_rendering(
     output["mean_lpips"] = float(np.mean(lpips_array))
 
     Log(
-        f'mean psnr: {output["mean_psnr"]}, ssim: {output["mean_ssim"]}, lpips: {output["mean_lpips"]}',
+        f'mean psnr: {output["mean_psnr"]}, ssim: {output["mean_ssim"]}, lpips: {output["mean_lpips"]} (evaluated from frame {start_idx})',
         tag="Eval",
     )
 

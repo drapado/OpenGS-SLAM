@@ -40,6 +40,7 @@ class BackEnd(mp.Process):
         self.current_window = []
         self.initialized = not self.monocular
         self.keyframe_optimizers = None
+        self.validation_mode = False  # Flag to indicate if we're in validation mode
         
         self.pcd_scale = 1          # scale factor
         self.theta = 0              # Camera angle diff from last keyframe
@@ -415,6 +416,8 @@ class BackEnd(mp.Process):
                     pts3d = data[4]
                     imgs = data[5]
                     mask = data[6]
+                    scale = data[7]
+                    self.validation_mode = data[8]  # Get validation mode from frontend
                     self.scale = 1
                     Log("Resetting the system")
                     self.reset()
@@ -438,6 +441,8 @@ class BackEnd(mp.Process):
                     mask = data[7]
                     self.scale = data[8]
                     self.theta = data[9]
+                    self.validation_mode = data[10]  # Get validation mode from frontend
+                    
                     theta_value = self.theta.item()
                     ## adjust the cumulative iterations for Adaptive Learning Rate Adjustment
                     if theta_value >= 2:
@@ -450,12 +455,30 @@ class BackEnd(mp.Process):
                     T = torch.from_numpy(T_np).to(self.device)
                     self.viewpoints[cur_frame_idx] = viewpoint
                     self.current_window = current_window
-                    #self.add_next_kf(cur_frame_idx, viewpoint, depth_map=depth_map)
-                    ## Adaptive Scale Mapper
-                    self.add_next_kf_dust3r(cur_frame_idx, pts3d, imgs, T, mask, scale=self.scale)
+                    
+                    # Only add new Gaussians if not in validation mode
+                    if not self.validation_mode:
+                        #self.add_next_kf(cur_frame_idx, viewpoint, depth_map=depth_map)
+                        ## Adaptive Scale Mapper
+                        self.add_next_kf_dust3r(cur_frame_idx, pts3d, imgs, T, mask, scale=self.scale)
+                    else:
+                        Log(f"Validation mode: Skipping Gaussian addition for frame {cur_frame_idx}")
     
                     opt_params = []
                     frames_to_optimize = self.config["Training"]["pose_window"]
+                    
+                    # Skip mapping iterations if in validation mode
+                    if self.validation_mode:
+                        Log(f"Validation mode: Skipping mapping optimization for frame {cur_frame_idx}")
+                        # Still need to store visibility for the frame
+                        render_pkg = render(
+                            viewpoint, self.gaussians, self.pipeline_params, self.background
+                        )
+                        n_touched = render_pkg["n_touched"]
+                        self.occ_aware_visibility[cur_frame_idx] = (n_touched > 0).long()
+                        self.push_to_frontend("keyframe")
+                        continue
+                        
                     iter_per_kf = self.mapping_itr_num if self.single_thread else 150
                     if not self.initialized:
                         if (

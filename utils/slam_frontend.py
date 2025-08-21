@@ -37,6 +37,8 @@ class FrontEnd(mp.Process):
         self.requested_init = False
         self.requested_keyframe = 0
         self.use_every_n_frames = 1
+        self.validation_start_frame = config["Training"].get("validation_start_frame", -1)
+        self.validation_mode = False  # Flag to indicate if we're in validation mode
 
         self.gaussians = None
         self.cameras = dict()
@@ -343,12 +345,12 @@ class FrontEnd(mp.Process):
     ### Exchange info with backend via following functions
     # Request new keyframe; enqueue related info to backend
     def request_keyframe(self, cur_frame_idx, viewpoint, current_window, depthmap):
-        msg = ["keyframe", cur_frame_idx, viewpoint, current_window, depthmap, self.pts3d, self.imgs, self.mask, self.scale1, self.theta]
+        msg = ["keyframe", cur_frame_idx, viewpoint, current_window, depthmap, self.pts3d, self.imgs, self.mask, self.scale1, self.theta, self.validation_mode]
         self.backend_queue.put(msg)
         self.requested_keyframe += 1
     # Request initialization; enqueue related info to backend.
     def request_init(self, cur_frame_idx, viewpoint, depth_map):
-        msg = ["init", cur_frame_idx, viewpoint, depth_map, self.pts3d, self.imgs, self.mask, self.scale1]
+        msg = ["init", cur_frame_idx, viewpoint, depth_map, self.pts3d, self.imgs, self.mask, self.scale1, self.validation_mode]
         self.backend_queue.put(msg)
         self.requested_init = True
     # Sync data from backend (3D Gaussians, occlusion-aware visibility, keyframe info)
@@ -408,6 +410,7 @@ class FrontEnd(mp.Process):
                             0,
                             final=True,
                             monocular=self.monocular,
+                            validation_start_frame=self.validation_start_frame,
                         )
                         save_gaussians(
                             self.gaussians, self.save_dir, "final", final=True
@@ -425,6 +428,13 @@ class FrontEnd(mp.Process):
                 if not self.initialized and self.requested_keyframe > 0:
                     time.sleep(0.01)
                     continue
+                
+                # Check if we should enter validation mode
+                if (self.validation_start_frame >= 0 and 
+                    cur_frame_idx >= self.validation_start_frame and 
+                    not self.validation_mode):
+                    self.validation_mode = True
+                    Log(f"Entering validation mode at frame {cur_frame_idx}")
                 
                 viewpoint = Camera.init_from_dataset(
                     self.dataset, cur_frame_idx, projection_matrix
@@ -519,14 +529,24 @@ class FrontEnd(mp.Process):
                     and create_kf
                     and len(self.kf_indices) % self.save_trj_kf_intv == 0
                 ):
-                    Log("Evaluating ATE at frame: ", cur_frame_idx)
-                    eval_ate(
-                        self.cameras,
-                        self.kf_indices,
-                        self.save_dir,
-                        cur_frame_idx,
-                        monocular=self.monocular,
-                    )
+                    # Check if we have enough validation keyframes for meaningful evaluation
+                    skip_evaluation = False
+                    if self.validation_start_frame >= 0:
+                        validation_kfs = [kf_id for kf_id in self.kf_indices if kf_id >= self.validation_start_frame]
+                        if len(validation_kfs) < 3:
+                            Log(f"Skipping ATE evaluation at frame {cur_frame_idx}: Only {len(validation_kfs)} validation keyframes available")
+                            skip_evaluation = True
+                    
+                    if not skip_evaluation:
+                        Log("Evaluating ATE at frame: ", cur_frame_idx)
+                        eval_ate(
+                            self.cameras,
+                            self.kf_indices,
+                            self.save_dir,
+                            cur_frame_idx,
+                            monocular=self.monocular,
+                            validation_start_frame=self.validation_start_frame,
+                        )
                 toc.record()
                 torch.cuda.synchronize()      
                 if create_kf:
