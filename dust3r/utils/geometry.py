@@ -349,6 +349,10 @@ def find_reciprocal_matches(P1, P2):
     2 - nn2_in_P1: a int array of size P2.shape[0], it contains the indexes of the closest points in P1
     3 - reciprocal_in_P2.sum(): the number of matches
     """
+    # Handle empty point clouds
+    if len(P1) == 0 or len(P2) == 0:
+        return np.array([], dtype=bool), np.array([], dtype=int), 0
+    
     tree1 = KDTree(P1)
     tree2 = KDTree(P2)
 

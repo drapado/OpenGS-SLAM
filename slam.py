@@ -21,7 +21,7 @@ from gaussian_splatting.utils.system_utils import mkdir_p
 from gui import gui_utils, slam_gui
 from utils.config_utils import load_config
 from utils.dataset import load_dataset
-from utils.eval_utils import eval_ate, eval_rendering, save_gaussians
+from utils.eval_utils import eval_ate, eval_rendering, save_gaussians, save_trajectory_txt
 from utils.logging_utils import Log
 from utils.multiprocessing_utils import FakeQueue
 from utils.slam_backend import BackEnd
@@ -204,6 +204,10 @@ class SLAM:
                 )
             wandb.log({"Metrics": metrics_table})
             save_gaussians(self.gaussians, self.save_dir, "final_after_opt", final=True)
+
+        # Save trajectory for all frames (train and validation) - always save regardless of eval_rendering
+        if self.save_dir:
+            save_trajectory_txt(self.frontend.cameras, self.dataset, self.save_dir, "trajectory_all.txt")
 
         backend_queue.put(["stop"])
         backend_process.join()       

@@ -112,17 +112,27 @@ def get_result(img1, img2, model, device, batch_size=1, niter=300, schedule='cos
         pts3d_list.append(pts3d1[i][conf_i])
     reciprocal_in_P2, nn2_in_P1, num_matches = find_reciprocal_matches(*pts3d_list)
     
-    index0 = nn2_in_P1[reciprocal_in_P2]
-    index1 = np.where(reciprocal_in_P2==True)[0]
-    matches_im1 = pts2d_list[1][reciprocal_in_P2]
-    matches_im0 = pts2d_list[0][nn2_in_P1][reciprocal_in_P2]
-    matches_3d1 = pts3d_list[1][reciprocal_in_P2]
-    matches_3d0 = pts3d_list[0][nn2_in_P1][reciprocal_in_P2]
+    # Handle case where no matches are found
+    if num_matches == 0:
+        # Return empty arrays with proper shapes
+        matches_im0 = np.empty((0, 2))
+        matches_im1 = np.empty((0, 2)) 
+        matches_3d0 = np.empty((0, 3))
+    else:
+        matches_im1 = pts2d_list[1][reciprocal_in_P2]
+        matches_im0 = pts2d_list[0][nn2_in_P1][reciprocal_in_P2]
+        matches_3d0 = pts3d_list[0][nn2_in_P1][reciprocal_in_P2]
         
     return trans_pose, pts3d, imgs, matches_im0, matches_im1, matches_3d0
 
 # Obtain the scale factor based on point matching correspondence and point cloud coordinates    
 def get_scale(matches_im1_0, matches_im1_1, matches_im2_0, matches_im2_1, matches_3d1_0, matches_3d2_1):
+    # Handle empty arrays - return default scale values
+    if (len(matches_im1_1) == 0 or len(matches_im2_0) == 0 or 
+        len(matches_im1_0) == 0 or len(matches_im2_1) == 0 or
+        len(matches_3d1_0) == 0 or len(matches_3d2_1) == 0):
+        return 1.0, 1.0
+    
     sorted_index = np.lexsort((matches_im1_1[:,0], matches_im1_1[:,1]))
     matches_im1_1s = matches_im1_1[sorted_index]
 

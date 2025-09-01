@@ -19,6 +19,7 @@
 		}
 	},
 	"mounts": [
+		// "source=/run/media/david/t7_4tb/agri-slam/agri-gs-slam-dataset,target=/data,type=bind",
 	],
     "runArgs": [
         "--gpus",

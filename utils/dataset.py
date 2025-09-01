@@ -480,7 +480,8 @@ class AgriDataset(MonocularDataset):
         self.color_paths = parser.color_paths
         self.depth_paths = [None] * parser.n_img  # No depth paths for RGB-only
         self.poses = parser.poses
-        
+        self.scene_center = parser.scene_center
+
         # Sky removal configuration
         self.use_sky_removal = config["Dataset"].get("use_sky_removal", False)
         

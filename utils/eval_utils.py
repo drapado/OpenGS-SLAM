@@ -266,6 +266,93 @@ def eval_rendering(
     )
     return output
 
+def save_trajectory_txt(frames, dataset, save_dir, filename="trajectory_all.txt"):
+    """
+    Save trajectory for all frames in the requested format:
+    TIMESTAMP T00 T01 T02 T03 T10 T11 T12 T13 T20 T21 T22 T23 (row first for the matrix)
+    
+    Args:
+        frames: Dictionary of frame indices to camera objects
+        dataset: Dataset object to access color paths for timestamp extraction
+        save_dir: Directory to save the trajectory file
+        filename: Name of the output file
+    """
+    if save_dir is None:
+        return
+        
+    mkdir_p(save_dir)
+    output_path = os.path.join(save_dir, filename)
+    
+    def gen_pose_matrix(R, T):
+        pose = np.eye(4)
+        pose[0:3, 0:3] = R.cpu().numpy()
+        pose[0:3, 3] = T.cpu().numpy()
+        return pose
+    
+    def extract_timestamp_from_filename(filepath):
+        """Extract timestamp from agricultural dataset filename"""
+        import os
+        basename = os.path.basename(filepath)
+        # Remove extension and extract timestamp part like "1744202088-180835000"
+        timestamp_str = basename.split('.')[0]
+        
+        try:
+            if '-' in timestamp_str:
+                parts = timestamp_str.split('-')
+                seconds = int(parts[0])
+                nanoseconds = int(parts[1])
+                # Convert to decimal seconds with nanosecond precision
+                return seconds + nanoseconds / 1e9
+            else:
+                return float(timestamp_str)
+        except Exception:
+            return None
+    
+    def denormalize_pose(pose, scene_center):
+        """Convert normalized pose back to original scale"""
+        denorm_pose = pose.copy()
+        # Reverse the normalization: divide by scale factor and add back scene center
+        denorm_pose[:3, 3] = pose[:3, 3] + scene_center
+        return denorm_pose
+    
+    # Get normalization parameters from dataset if available
+    scene_center = np.array([0, 0, 0])
+    scale_factor = 1.0
+    if dataset is not None and hasattr(dataset, 'scene_center') and hasattr(dataset, 'scale_factor'):
+        scene_center = dataset.scene_center
+        scale_factor = dataset.scale_factor
+        Log(f"Using dataset normalization - center: {scene_center}, scale: {scale_factor}")
+    else:
+        Log("No normalization parameters found - saving poses as-is")
+    
+    # Sort frames by index for sequential output
+    sorted_frame_indices = sorted(frames.keys())
+    
+    with open(output_path, 'w') as f:
+        for frame_idx in sorted_frame_indices:
+            frame = frames[frame_idx]
+            
+            # Use estimated pose (convert from W2C to C2W)
+            pose_est = np.linalg.inv(gen_pose_matrix(frame.R, frame.T))
+            
+            # Denormalize the pose to original scale
+            pose_est = denormalize_pose(pose_est, dataset.scene_center)
+            
+            # Extract timestamp from filename if available in the dataset
+            timestamp = frame_idx  # Default fallback
+            if hasattr(dataset, 'color_paths') and frame_idx < len(dataset.color_paths):
+                filepath = dataset.color_paths[frame_idx]
+                extracted_timestamp = extract_timestamp_from_filename(filepath)
+                if extracted_timestamp is not None:
+                    timestamp = extracted_timestamp
+            
+            # Extract transformation matrix components (row-wise)
+            T = pose_est
+            line = f"{timestamp:.6f} {T[0,0]:.6f} {T[0,1]:.6f} {T[0,2]:.6f} {T[0,3]:.6f} {T[1,0]:.6f} {T[1,1]:.6f} {T[1,2]:.6f} {T[1,3]:.6f} {T[2,0]:.6f} {T[2,1]:.6f} {T[2,2]:.6f} {T[2,3]:.6f}\n"
+            f.write(line)
+    
+    Log(f"Trajectory saved to {output_path} with {len(sorted_frame_indices)} frames")
+
 def save_gaussians(gaussians, name, iteration, final=False):
     if name is None:
         return

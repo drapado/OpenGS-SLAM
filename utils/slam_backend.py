@@ -398,6 +398,8 @@ class BackEnd(mp.Process):
                 if self.last_sent >= 10:         
                     self.map(self.current_window, prune=True, iters=10)
                     self.push_to_frontend()
+                    # Clear CUDA cache after pushing to frontend to prevent IPC memory buildup
+                    torch.cuda.empty_cache()
             else:
                 data = self.backend_queue.get()
                 if data[0] == "stop":
@@ -430,6 +432,8 @@ class BackEnd(mp.Process):
                     self.add_next_kf_dust3r(cur_frame_idx, pts3d, imgs, T, mask, init=True, scale=self.scale)
                     self.initialize_map(cur_frame_idx, viewpoint)
                     self.push_to_frontend("init")
+                    # Clear CUDA cache after initialization
+                    torch.cuda.empty_cache()
 
                 elif data[0] == "keyframe":
                     cur_frame_idx = data[1]
@@ -534,6 +538,8 @@ class BackEnd(mp.Process):
                     self.map(self.current_window, iters=iter_per_kf)
                     self.map(self.current_window, prune=True)
                     self.push_to_frontend("keyframe")
+                    # Clear CUDA cache after keyframe processing
+                    torch.cuda.empty_cache()
                 else:
                     raise Exception("Unprocessed data", data)
         while not self.backend_queue.empty():

@@ -19,6 +19,6 @@ export CUDA_VISIBLE_DEVICES=0
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/workspaces/OpenGS-SLAM/miniconda3/envs/opengs-slam/lib/python3.11/site-packages/torch/lib/
 
 echo "Starting SLAM on training data..."
-python slam.py --config configs/mono/agri/train_val.yaml --validation_start_frame 130
+python slam.py --config configs/mono/agri/train.yaml --validation_start_frame 296
 
 echo "SLAM completed!"

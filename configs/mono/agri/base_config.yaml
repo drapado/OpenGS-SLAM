@@ -3,7 +3,7 @@ Results:
   save_dir: "results"
   save_trj: True
   save_trj_kf_intv: 10
-  use_gui: True
+  use_gui: False
   eval_rendering: True
   use_wandb: False
   color_refinement: True
@@ -35,11 +35,10 @@ Training:
   pose_window: 3
   edge_threshold: 1.1
   rgb_boundary_threshold: 0.01
-  validation_start_frame: -1  # Frame number from which to stop training GS model (-1 to disable)
 
-  kf_translation: 0.08
-  kf_min_translation: 0.05
-  kf_overlap: 0.9
+  kf_translation: 0.15
+  kf_min_translation: 0.1
+  kf_overlap: 0.95
   kf_cutoff: 0.3
   prune_mode: 'slam'
   single_thread: False

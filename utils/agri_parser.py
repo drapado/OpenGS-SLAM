@@ -115,7 +115,7 @@ class AgriParser:
             # Normalize the pose
             normalized_pose = pose.copy()
             # Translate to center, then scale
-            normalized_pose[:3, 3] = (pose[:3, 3] - scene_center) * scale_factor
+            normalized_pose[:3, 3] = (pose[:3, 3] - scene_center)
             
             # Convert to camera coordinate system (invert the pose)
             inv_pose = np.linalg.inv(normalized_pose)

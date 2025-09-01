@@ -8,7 +8,7 @@ from gaussian_splatting.gaussian_renderer import render
 from gaussian_splatting.utils.graphics_utils import getProjectionMatrix2, getWorld2View2
 from gui import gui_utils
 from utils.camera_utils import Camera
-from utils.eval_utils import eval_ate, save_gaussians
+from utils.eval_utils import eval_ate, save_gaussians, save_trajectory_txt
 from utils.logging_utils import Log
 from utils.multiprocessing_utils import clone_obj
 from utils.pose_utils import update_pose
@@ -415,6 +415,8 @@ class FrontEnd(mp.Process):
                         save_gaussians(
                             self.gaussians, self.save_dir, "final", final=True
                         )
+                        # Save trajectory for all frames (both train and validation)
+                        save_trajectory_txt(self.cameras, self.dataset, self.save_dir, "trajectory_all.txt")
                     break
               
                 if self.requested_init:
@@ -548,7 +550,12 @@ class FrontEnd(mp.Process):
                             validation_start_frame=self.validation_start_frame,
                         )
                 toc.record()
-                torch.cuda.synchronize()      
+                torch.cuda.synchronize()
+                
+                # Clear CUDA cache to prevent memory accumulation in multiprocessing
+                if cur_frame_idx % 10 == 0:  # Clear every 10 frames to reduce overhead
+                    torch.cuda.empty_cache()
+                    
                 if create_kf:
                     duration = tic.elapsed_time(toc)
                     time.sleep(max(0.01, 1.0 / 3.0 - duration / 1000))
@@ -556,14 +563,20 @@ class FrontEnd(mp.Process):
                 data = self.frontend_queue.get()
                 if data[0] == "sync_backend":
                     self.sync_backend(data)
+                    # Clear CUDA cache after backend sync to prevent IPC memory buildup
+                    torch.cuda.empty_cache()
 
                 elif data[0] == "keyframe":
                     self.sync_backend(data)
                     self.requested_keyframe -= 1
+                    # Clear CUDA cache after keyframe sync
+                    torch.cuda.empty_cache()
 
                 elif data[0] == "init":
                     self.sync_backend(data)
                     self.requested_init = False
+                    # Clear CUDA cache after init sync
+                    torch.cuda.empty_cache()
 
                 elif data[0] == "stop":
                     Log("Frontend Stopped.")
