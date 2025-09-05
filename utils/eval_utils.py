@@ -157,10 +157,12 @@ def eval_rendering(
     kf_indices,
     iteration="final",
     validation_start_frame=-1,  # New parameter to specify validation start frame
+    validation_end_frame=-1,  # New parameter to specify validation end frame
 ):
     interval = 1
     img_pred, img_gt, saved_frame_idx, img_residual = [], [], [], []
     end_idx = len(frames) - 1 if iteration == "final" or "before_opt" else iteration
+    end_idx = validation_end_frame if validation_end_frame >= 0 else end_idx
     
     # Determine the start index for evaluation
     start_idx = max(0, validation_start_frame) if validation_start_frame >= 0 else 0
@@ -261,7 +263,7 @@ def eval_rendering(
 
     json.dump(
         output,
-        open(os.path.join(psnr_save_dir, "final_result.json"), "w", encoding="utf-8"),
+        open(os.path.join(psnr_save_dir, f"final_result_{validation_start_frame}_{end_idx}.json"), "w", encoding="utf-8"),
         indent=4,
     )
     return output
@@ -282,6 +284,7 @@ def save_trajectory_txt(frames, dataset, save_dir, filename="trajectory_all.txt"
         
     mkdir_p(save_dir)
     output_path = os.path.join(save_dir, filename)
+    output_path_gps = os.path.join(save_dir, "trajectory_gps.txt")
     
     def gen_pose_matrix(R, T):
         pose = np.eye(4)
@@ -333,6 +336,29 @@ def save_trajectory_txt(frames, dataset, save_dir, filename="trajectory_all.txt"
             frame = frames[frame_idx]
             
             # Use estimated pose (convert from W2C to C2W)
+            pose_est = gen_pose_matrix(frame.R, frame.T)
+            
+            # Denormalize the pose to original scale
+            # pose_est = denormalize_pose(pose_est, dataset.scene_center)
+            
+            # Extract timestamp from filename if available in the dataset
+            timestamp = frame_idx  # Default fallback
+            if hasattr(dataset, 'color_paths') and frame_idx < len(dataset.color_paths):
+                filepath = dataset.color_paths[frame_idx]
+                extracted_timestamp = extract_timestamp_from_filename(filepath)
+                if extracted_timestamp is not None:
+                    timestamp = extracted_timestamp
+            
+            # Extract transformation matrix components (row-wise)
+            T = pose_est
+            line = f"{timestamp:.6f} {T[0,0]:.6f} {T[0,1]:.6f} {T[0,2]:.6f} {T[0,3]:.6f} {T[1,0]:.6f} {T[1,1]:.6f} {T[1,2]:.6f} {T[1,3]:.6f} {T[2,0]:.6f} {T[2,1]:.6f} {T[2,2]:.6f} {T[2,3]:.6f}\n"
+            f.write(line)
+    
+    with open(output_path_gps, 'w') as f:
+        for frame_idx in sorted_frame_indices:
+            frame = frames[frame_idx]
+            
+            # Use estimated pose (convert from W2C to C2W)
             pose_est = np.linalg.inv(gen_pose_matrix(frame.R, frame.T))
             
             # Denormalize the pose to original scale
@@ -350,7 +376,7 @@ def save_trajectory_txt(frames, dataset, save_dir, filename="trajectory_all.txt"
             T = pose_est
             line = f"{timestamp:.6f} {T[0,0]:.6f} {T[0,1]:.6f} {T[0,2]:.6f} {T[0,3]:.6f} {T[1,0]:.6f} {T[1,1]:.6f} {T[1,2]:.6f} {T[1,3]:.6f} {T[2,0]:.6f} {T[2,1]:.6f} {T[2,2]:.6f} {T[2,3]:.6f}\n"
             f.write(line)
-    
+
     Log(f"Trajectory saved to {output_path} with {len(sorted_frame_indices)} frames")
 
 def save_gaussians(gaussians, name, iteration, final=False):

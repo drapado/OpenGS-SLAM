@@ -410,7 +410,7 @@ class FrontEnd(mp.Process):
                             0,
                             final=True,
                             monocular=self.monocular,
-                            validation_start_frame=self.validation_start_frame,
+                            validation_start_frame=0,
                         )
                         save_gaussians(
                             self.gaussians, self.save_dir, "final", final=True
@@ -534,7 +534,7 @@ class FrontEnd(mp.Process):
                     # Check if we have enough validation keyframes for meaningful evaluation
                     skip_evaluation = False
                     if self.validation_start_frame >= 0:
-                        validation_kfs = [kf_id for kf_id in self.kf_indices if kf_id >= self.validation_start_frame]
+                        validation_kfs = [kf_id for kf_id in self.kf_indices if kf_id >= 0]
                         if len(validation_kfs) < 3:
                             Log(f"Skipping ATE evaluation at frame {cur_frame_idx}: Only {len(validation_kfs)} validation keyframes available")
                             skip_evaluation = True
@@ -547,7 +547,7 @@ class FrontEnd(mp.Process):
                             self.save_dir,
                             cur_frame_idx,
                             monocular=self.monocular,
-                            validation_start_frame=self.validation_start_frame,
+                            validation_start_frame=0,
                         )
                 toc.record()
                 torch.cuda.synchronize()

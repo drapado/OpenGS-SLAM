@@ -92,15 +92,16 @@ class AgriParser:
         if matched_pairs:
             # Calculate scene center and scale for normalization
             all_translations = np.array([pair[1][:3, 3] for pair in matched_pairs])
-            scene_center = np.mean(all_translations, axis=0)
+            # scene_center = np.mean(all_translations, axis=0)
+            scene_center = all_translations[0]
             
             # Calculate scale - use max distance from center, but cap it at reasonable value
             distances = np.linalg.norm(all_translations - scene_center, axis=1)
             max_distance = np.max(distances)
             
             # Normalize to fit within a sphere of radius 5 (typical for NeRF/GS)
-            target_radius = 5.0
-            scale_factor = target_radius / max_distance if max_distance > 0 else 1.0
+            # target_radius = 5.0
+            scale_factor = 1.0
             
             print("Scene normalization:")
             print(f"  Original center: [{scene_center[0]:.2f}, {scene_center[1]:.2f}, {scene_center[2]:.2f}]")
@@ -119,6 +120,7 @@ class AgriParser:
             
             # Convert to camera coordinate system (invert the pose)
             inv_pose = np.linalg.inv(normalized_pose)
+            # inv_pose = normalized_pose
             self.poses.append(inv_pose)
             
             frame = {
